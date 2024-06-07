@@ -4,3 +4,14 @@ instabboy/data/raw/*/*.json.xz
 instabboy/data/raw/*/*.txt
 instabboy/args.txt
 instabboy/bboys.txt
+
+**/InstaPy
+**/instagram-profilecrawl
+**/instapy-quickstart
+**/latest_logs
+**/notebook
+**/saved_cookies
+
+**/data
+**/*.txt
+**/.venv

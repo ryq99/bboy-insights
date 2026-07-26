@@ -1,0 +1,19 @@
+[project]
+name = "bboy-insights"
+version = "0.1.0"
+description = "Data collection and analysis for the bboy (breaking) community — YouTube and Instagram."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "boto3",
+    "awswrangler",
+    "pandas",
+    "google-api-python-client",
+    "google-auth-oauthlib",
+    "google-auth-httplib2",
+    "youtube-transcript-api",
+    "python-dotenv",
+]
+
+[tool.uv]
+package = false

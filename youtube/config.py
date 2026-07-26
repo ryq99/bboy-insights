@@ -1,17 +1,8 @@
-"""Configuration loaded from a local `.env` file.
-
-Values (see `.env.example`):
-    YT_DATA_API_KEY   YouTube Data API v3 key
-    S3_BUCKET         destination bucket (default: bboy-insights)
-    S3_PREFIX         key prefix within the bucket (default: youtube_data)
-    AWS_REGION        AWS region for boto3/awswrangler (default: us-west-2)
-"""
 import os
 
 from dotenv import load_dotenv
 
-# Load `.env` from the current working directory (repo root when run via `python -m youtube`).
-load_dotenv()
+load_dotenv()  # read config/secrets from .env in the working dir (repo root under the CLI); see .env.example
 
 S3_BUCKET = os.getenv("S3_BUCKET", "bboy-insights")
 S3_PREFIX = os.getenv("S3_PREFIX", "youtube_data")

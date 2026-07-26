@@ -1,8 +1,3 @@
-"""S3 read/write helpers (awswrangler) for YouTube datasets.
-
-Layout: s3://{S3_BUCKET}/{S3_PREFIX}/{dataset}/{name}.csv
-CSV is kept for compatibility with the existing notebook readers.
-"""
 import time
 
 import awswrangler as wr
@@ -16,6 +11,7 @@ def _session() -> boto3.Session:
 
 
 def dataset_uri(dataset: str, name: str | None = None) -> str:
+    # Layout: s3://{bucket}/{prefix}/{dataset}/{name}.csv (CSV, for existing notebook-reader compat).
     base = f"s3://{config.S3_BUCKET}/{config.S3_PREFIX}/{dataset}"
     return f"{base}/{name}.csv" if name else base
 

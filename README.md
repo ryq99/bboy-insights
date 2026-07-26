@@ -1,2 +1,12 @@
 # Bboy Insights
-Use Instagram users data to seek, collect, and understand the bboy and the breaking community.
+
+A data collection and analysis project for the bboy (breakdancing/breaking) community, using YouTube and Instagram as primary data sources.
+
+## Goal
+
+Scrape, store, and analyze content from major bboy channels and accounts to surface insights about the breaking community — top creators, trending content, engagement patterns, and community structure.
+
+## Data Sources
+
+- YouTube
+- Instagram

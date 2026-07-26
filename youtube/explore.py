@@ -1,15 +1,5 @@
-"""Feature (a): seed-aware bboy channel discovery.
-
-Data API v3 has no "similar channels" endpoint, so we approximate:
-  1. Resolve seed handles (e.g. @redbullbcone) -> channel_id + uploads playlist.
-  2. Derive query terms from each seed's recent video tags/titles, ranked by
-     frequency, unioned with config.BBOY_KEYWORDS.
-  3. Run video search for each term; collect the uploader channelIds.
-  4. Aggregate + score channels, enrich with channels.list stats.
-  5. Write a scored candidate-channels table to S3 for manual curation.
-"""
 import re
-from collections import Counter, defaultdict
+from collections import Counter
 
 import pandas as pd
 
@@ -177,6 +167,12 @@ def explore(
     recent_n: int = 50,
     dry_run: bool = False,
 ) -> pd.DataFrame | None:
+    """Seed-aware bboy channel discovery (Data API v3 has no "similar channels" endpoint).
+
+    Resolve seed handles -> derive query terms from their recent video tags/titles (ranked,
+    unioned with BBOY_KEYWORDS) -> video-search each term for uploader channels -> aggregate,
+    score, and enrich -> write a scored candidate table to S3. `dry_run` stops before searching.
+    """
     yt = YouTubeClient()
 
     resolved = []

@@ -1,16 +1,8 @@
-"""Thin YouTube Data API v3 client with quota accounting.
-
-Wraps the googleapiclient discovery object so every call is charged against a
-running quota estimate (the API has a 10,000 unit/day default). Costs per call:
-    search.list         100
-    channels.list         1
-    videos.list           1
-    playlistItems.list    1
-"""
 import googleapiclient.discovery
 
 from . import config
 
+# Quota units charged per call type by the Data API v3 (default budget 10,000 units/day).
 QUOTA_COSTS = {
     "search": 100,
     "channels": 1,
@@ -20,6 +12,8 @@ QUOTA_COSTS = {
 
 
 class YouTubeClient:
+    """Wraps the API discovery client and charges every call against a running quota estimate (`quota_used`)."""
+
     def __init__(self, api_key: str | None = None):
         self._yt = googleapiclient.discovery.build(
             "youtube",

@@ -30,7 +30,7 @@ cp .env.example .env    # then fill in YT_DATA_API_KEY
 
 ## YouTube ingestion (`youtube/`)
 
-CLI: `uv run python -m youtube <command>`.
+CLI: `uv run youtube <command>` (installed as a console script by `uv sync`).
 
 ### `explore` — discover bboy channels
 
@@ -41,13 +41,13 @@ scored, and written to S3 for manual curation.
 
 ```bash
 # preview the derived terms + projected quota, spend nothing
-uv run python -m youtube explore --seed @redbullbcone --dry-run
+uv run youtube explore --seed @redbullbcone --dry-run
 
 # small live run (~300 quota units)
-uv run python -m youtube explore --seed @redbullbcone --pages 1 --max-queries 3
+uv run youtube explore --seed @redbullbcone --pages 1 --max-queries 3
 
 # broader sweep with multiple seeds
-uv run python -m youtube explore --seed @redbullbcone @stanceelements --pages 2 --max-queries 12
+uv run youtube explore --seed @redbullbcone @stanceelements --pages 2 --max-queries 12
 ```
 
 Key flags: `--seed` (one or more handles), `--pages` (search pages/term), `--max-queries` (cap on terms),

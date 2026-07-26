@@ -1,4 +1,6 @@
-"""CLI entrypoint: `python -m youtube <subcommand> ...`.
+"""CLI entrypoint: installed as the `youtube` console script (see pyproject.toml).
+
+Usage: `youtube <subcommand> ...` (via `uv run youtube ...`).
 
 Subcommands:
     explore   Discover bboy channels from seed handles (Feature a).
@@ -58,7 +60,3 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     parser.error(f"unknown command {args.command!r}")
     return 2
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

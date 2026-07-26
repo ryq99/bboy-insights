@@ -15,3 +15,9 @@ instabboy/bboys.txt
 **/data
 **/*.txt
 **/.venv
+
+# secrets / local env
+.env
+**/__pycache__/
+.DS_Store
+**/.DS_Store

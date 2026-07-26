@@ -1,10 +1,3 @@
-"""CLI entrypoint: installed as the `youtube` console script (see pyproject.toml).
-
-Usage: `youtube <subcommand> ...` (via `uv run youtube ...`).
-
-Subcommands:
-    explore   Discover bboy channels from seed handles (Feature a).
-"""
 import argparse
 
 from . import explore as explore_mod
@@ -42,6 +35,7 @@ def _add_explore(subparsers):
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Entry point for the `youtube` console script; dispatches subcommands (currently `explore`)."""
     parser = argparse.ArgumentParser(prog="youtube", description="bboy-insights YouTube ingestion")
     subparsers = parser.add_subparsers(dest="command", required=True)
     _add_explore(subparsers)

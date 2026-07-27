@@ -1,9 +1,12 @@
 import time
+from pathlib import Path
 
 import awswrangler as wr
 import boto3
 
 from . import config
+
+LOCAL_DATA_DIR = Path("data")  # local mirror of the S3 datasets; gitignored
 
 
 def _session() -> boto3.Session:
@@ -17,8 +20,14 @@ def dataset_uri(dataset: str, name: str | None = None) -> str:
 
 
 def to_csv(df, dataset: str, name_prefix: str) -> str:
-    """Write a DataFrame to s3://.../{dataset}/{name_prefix}_{epoch}.csv. Returns the path."""
+    """Write a DataFrame to s3://.../{dataset}/{name_prefix}_{epoch}.csv plus a local copy under
+    data/{dataset}/ (same filename). Returns the S3 path."""
     name = f"{name_prefix}_{int(time.time())}"
+
+    local_path = LOCAL_DATA_DIR / dataset / f"{name}.csv"
+    local_path.parent.mkdir(parents=True, exist_ok=True)  # data/{dataset}/ — gitignored
+    df.to_csv(local_path, index=False)
+
     path = dataset_uri(dataset, name)
     wr.s3.to_csv(df=df, path=path, index=False, boto3_session=_session())
     return path

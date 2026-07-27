@@ -20,6 +20,7 @@ BBOY_KEYWORDS = [
     "cypher",
     "top rock",
     "footwork",
+    "freeze",
     "power move",
     "Red Bull BC One",
     "Freestyle Session",

@@ -158,6 +158,14 @@ def enrich_channels(yt: YouTubeClient, channel_ids: list[str]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def seen_channel_ids() -> set[str]:
+    """channel_ids already written to the candidates dataset in prior runs (empty on first run)."""
+    prior = s3io.read_csv_optional(DATASET)
+    if prior is None or "channel_id" not in prior.columns:
+        return set()
+    return set(prior["channel_id"].dropna().astype(str))
+
+
 def explore(
     seeds: list[str],
     keywords: list[str] | None = None,
@@ -165,6 +173,7 @@ def explore(
     order: str = "viewCount",
     max_queries: int = 12,
     recent_n: int = 50,
+    include_seen: bool = False,
     dry_run: bool = False,
 ) -> pd.DataFrame | None:
     """Seed-aware bboy channel discovery (Data API v3 has no "similar channels" endpoint).
@@ -215,8 +224,24 @@ def explore(
         .reset_index()
     )
     agg["match_score"] = agg["n_terms"] * 2 + agg["n_videos"]
+    print(f"Found {len(agg)} unique candidate channels (excluding seeds).")
 
-    print(f"Found {len(agg)} unique candidate channels; enriching...")
+    if not include_seen:
+        seen = seen_channel_ids()
+        if seen:
+            before = len(agg)
+            agg = agg[~agg["channel_id"].isin(seen)].reset_index(drop=True)
+            print(
+                f"Excluded {before - len(agg)} previously-seen "
+                f"({len(seen)} known); {len(agg)} new since last run."
+            )
+
+    if agg.empty:
+        print("\nNo new channels since last run — nothing written.")
+        print(f"Total quota used this run: {yt.quota_used} units")
+        return None
+
+    print(f"Enriching {len(agg)} channels...")
     enriched = enrich_channels(yt, agg["channel_id"].tolist())
     out = (
         agg.merge(enriched, on="channel_id", how="left")
@@ -225,7 +250,7 @@ def explore(
     )
 
     path = s3io.to_csv(out, DATASET, "candidate_channels")
-    print(f"\nWrote {len(out)} candidates -> {path}")
+    print(f"\nWrote {len(out)} new candidates -> {path}")
     print(f"Total quota used this run: {yt.quota_used} units")
     print(out[["channel_id", "title", "match_score", "num_subscribers", "likely_bboy"]].head(15).to_string(index=False))
     return out

@@ -27,3 +27,11 @@ def to_csv(df, dataset: str, name_prefix: str) -> str:
 def read_csv(dataset: str, pattern: str = "*"):
     """Read s3://.../{dataset}/{pattern}.csv into a DataFrame."""
     return wr.s3.read_csv(dataset_uri(dataset, pattern), boto3_session=_session())
+
+
+def read_csv_optional(dataset: str, pattern: str = "*"):
+    """Like read_csv, but return None when no matching objects exist yet (e.g. first run)."""
+    try:
+        return read_csv(dataset, pattern)
+    except wr.exceptions.NoFilesFound:
+        return None

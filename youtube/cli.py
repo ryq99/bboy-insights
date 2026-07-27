@@ -27,6 +27,11 @@ def _add_explore(subparsers):
     p.add_argument("--max-queries", type=int, default=12, help="Cap on number of query terms.")
     p.add_argument("--recent-n", type=int, default=50, help="Seed videos sampled for term derivation.")
     p.add_argument(
+        "--include-seen",
+        action="store_true",
+        help="Include channels already written to candidates/ in prior runs (default: new only).",
+    )
+    p.add_argument(
         "--dry-run",
         action="store_true",
         help="Print derived terms + projected quota, then stop (no search spend).",
@@ -49,6 +54,7 @@ def main(argv: list[str] | None = None) -> int:
             order=args.order,
             max_queries=args.max_queries,
             recent_n=args.recent_n,
+            include_seen=args.include_seen,
             dry_run=args.dry_run,
         )
         return 0

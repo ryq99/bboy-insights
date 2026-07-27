@@ -51,7 +51,11 @@ uv run youtube explore --seed @redbullbcone @stanceelements --pages 2 --max-quer
 ```
 
 Key flags: `--seed` (one or more handles), `--pages` (search pages/term), `--max-queries` (cap on terms),
-`--order` (`viewCount` default), `--keywords` (override derived terms), `--dry-run`.
+`--order` (`viewCount` default), `--keywords` (override derived terms), `--include-seen`, `--dry-run`.
+
+By default each run returns only channels **not** already in `candidates/` from prior runs ("new since
+last time" — deduped against every prior candidate table). Pass `--include-seen` to return all discovered
+channels regardless.
 
 **Quota:** `search.list` costs 100 units/call (10,000/day default), so a run costs
 roughly `max_queries × pages × 100`. Use `--dry-run` to check the projection first.

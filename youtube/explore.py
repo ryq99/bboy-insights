@@ -180,7 +180,8 @@ def explore(
 
     Resolve seed handles -> derive query terms from their recent video tags/titles (ranked,
     unioned with BBOY_KEYWORDS) -> video-search each term for uploader channels -> aggregate,
-    score, and enrich -> write a scored candidate table to S3. `dry_run` stops before searching.
+    score, and enrich -> write a scored candidate table to S3 (and a local copy under data/).
+    Only channels new since the last run are kept unless `include_seen`; `dry_run` stops before searching.
     """
     yt = YouTubeClient()
 

@@ -25,7 +25,20 @@ def _add_explore(subparsers):
         help="search.list order.",
     )
     p.add_argument("--max-queries", type=int, default=12, help="Cap on number of query terms.")
-    p.add_argument("--recent-n", type=int, default=50, help="Seed videos sampled for term derivation.")
+    p.add_argument("--recent-n", type=int, default=50, help="Seed videos sampled per seed.")
+    p.add_argument(
+        "--sources",
+        nargs="+",
+        default=["description"],
+        choices=["description", "search"],
+        help="Discovery sources (default: description-link mining; add 'search' for keyword-search reach).",
+    )
+    p.add_argument(
+        "--max-handle-resolves",
+        type=int,
+        default=50,
+        help="Cap on @handles resolved from descriptions (1 quota unit each).",
+    )
     p.add_argument(
         "--include-seen",
         action="store_true",
@@ -54,6 +67,8 @@ def main(argv: list[str] | None = None) -> int:
             order=args.order,
             max_queries=args.max_queries,
             recent_n=args.recent_n,
+            sources=tuple(args.sources),
+            max_handle_resolves=args.max_handle_resolves,
             include_seen=args.include_seen,
             dry_run=args.dry_run,
         )

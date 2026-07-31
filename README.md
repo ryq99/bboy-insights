@@ -34,32 +34,40 @@ CLI: `uv run youtube <command>` (installed as a console script by `uv sync`).
 
 ### `explore` — discover bboy channels
 
-The YouTube Data API has no "similar channels" endpoint, so discovery is **seed-aware**: it takes a seed
-channel handle, derives search terms from that channel's recent video tags/titles (plus a bboy keyword
-list), runs video search, and collects the uploader channels. Results are enriched with channel stats,
-scored, and written to S3 for manual curation.
+The YouTube Data API has no "similar channels" endpoint, so discovery is **seed-aware** with two
+selectable sources (`--sources`):
+
+- **`description`** (default) — mine channels **linked in the seeds' channel/video descriptions**
+  (`/channel/UC…`, `@handles`, video links resolved to their uploader). High precision, cheap, organic.
+- **`search`** — derive terms from the seeds' recent video tags/titles and run video search for uploader
+  channels. Broader reach, but noisier and ~100 quota units/term (opt-in booster).
+
+Results from the chosen sources are unioned, enriched with channel stats, scored, and written to S3 +
+a local `data/` copy for manual curation.
 
 ```bash
-# preview the derived terms + projected quota, spend nothing
+# preview sources + projected quota, spend nothing
 uv run youtube explore --seed @redbullbcone --dry-run
 
-# small live run (~300 quota units)
-uv run youtube explore --seed @redbullbcone --pages 1 --max-queries 3
+# default: description-link mining (cheap)
+uv run youtube explore --seed @redbullbcone
 
-# broader sweep with multiple seeds
-uv run youtube explore --seed @redbullbcone @stanceelements --pages 2 --max-queries 12
+# add the keyword-search booster for more reach
+uv run youtube explore --seed @redbullbcone @stanceelements --sources description search --pages 2 --max-queries 12
 ```
 
-Key flags: `--seed` (one or more handles), `--pages` (search pages/term), `--max-queries` (cap on terms),
-`--order` (`viewCount` default), `--keywords` (override derived terms), `--include-seen`, `--dry-run`.
+Key flags: `--seed` (one or more handles), `--sources` (`description` default; add `search`),
+`--max-handle-resolves` (cap on @handle lookups), `--pages` / `--max-queries` / `--order` / `--keywords`
+(search source), `--include-seen`, `--dry-run`.
 
 By default each run returns only channels **not** already in `candidates/` from prior runs ("new since
 last time" — deduped against every prior candidate table). Pass `--include-seen` to return all discovered
 channels regardless.
 
-**Quota:** `search.list` costs 100 units/call (10,000/day default), so a run costs
-roughly `max_queries × pages × 100`. Use `--dry-run` to check the projection first.
+**Quota:** description mining is cheap (a few units + ≤`--max-handle-resolves` @handle lookups). The
+`search` source dominates cost — `search.list` is 100 units/call, so ~`max_queries × pages × 100`. Use
+`--dry-run` to check the projection first.
 
-**Output:** `s3://bboy-insights/youtube_data/candidates/candidate_channels_<ts>.csv` — one row per
-candidate channel with `match_score`, subscriber/video/view counts, topic categories, and a
-`likely_bboy` flag, sorted by score.
+**Output:** `s3://bboy-insights/youtube_data/candidates/candidate_channels_<ts>.csv` (+ local `data/`
+copy) — one row per candidate channel with `source` (`description_link` / `search` / `both`),
+`match_score`, subscriber/video/view counts, topic categories, and a `likely_bboy` flag, sorted by score.

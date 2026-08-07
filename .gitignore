@@ -16,6 +16,9 @@ instabboy/bboys.txt
 **/*.txt
 **/.venv
 
+# notebooks
+**/*.ipynb
+
 # secrets / local env
 .env
 **/__pycache__/

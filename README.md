@@ -32,7 +32,48 @@ cp .env.example .env    # then fill in YT_DATA_API_KEY
 
 CLI: `uv run youtube <command>` (installed as a console script by `uv sync`).
 
-### `explore` — discover bboy channels
+### `ingest` — breadth-browse curated channels
+
+Builds the bboy-channel database by browsing a **curated seed list** (`config.SEED_CHANNELS`, edited by
+hand) breadth-first: for each channel it writes a one-row channel snapshot and a table of every video's
+high-level metadata (title, description, tags, duration, stats, topics, content type) in a time window.
+
+```bash
+# preview: resolve channels, count in-window videos, project quota — writes nothing
+uv run youtube ingest --dry-run
+
+# default: last 3 months of uploads for every SEED_CHANNELS entry
+uv run youtube ingest
+
+# a specific channel, full-history backfill (same code path, just a wider window)
+uv run youtube ingest --channels @redbullbcone --since all
+```
+
+Key flags: `--channels` (default `config.SEED_CHANNELS`), `--since` (`3m` default / `6m` / `12m` / `1y`
+/ `all`), `--refresh` (re-pull in-window videos to update view/like counts; default skips
+already-stored videos), `--dry-run`.
+
+**Incremental:** by default each run skips `video_id`s already stored for the channel, so re-runs cost
+only the cheap playlist paging. `--refresh` re-pulls in-window videos to freshen stats.
+
+**Quota:** cheap — per channel ≈ 1 unit (channel meta) + 1 unit/50 videos to list uploads + 1 unit/50
+to fetch details. A full ~3,300-video backfill ≈ 135 units (of the 10k/day).
+
+**Output** (S3 + local `data/` mirror, one file per channel per run):
+- `channel_metadata/<channel_id>_<ts>.csv` — subs/videos/views, country, description, channel keywords,
+  topic categories, uploads playlist.
+- `video_details/<channel_id>_<ts>.csv` — one row per video: title, description, tags, `published_at`,
+  `duration_sec`, `content_type` (`short`/`video`/`live`/`upcoming`), view/like/comment counts, topic
+  categories, `has_captions`, languages.
+
+Read the whole video table with `s3io.read_csv("video_details")`, then dedup on `video_id` keeping the
+latest `fetched_at` (backfill + incremental runs accumulate per-channel files).
+
+### `explore` — discover bboy channels (parked)
+
+> **Status: parked.** Description-link mining returns ~0 for media brands like Red Bull BC One (recent
+> uploads are hashtag-only Shorts), and the keyword `search` source is noisy. Channels are curated by
+> hand in `SEED_CHANNELS` for now; this is kept for reference / future rework.
 
 The YouTube Data API has no "similar channels" endpoint, so discovery is **seed-aware** with two
 selectable sources (`--sources`):
@@ -46,7 +87,7 @@ Results from the chosen sources are unioned, enriched with channel stats, scored
 a local `data/` copy for manual curation.
 
 ```bash
-# preview sources + projected quota, spend nothing
+# preview sources + projected quota, 1 unit api cost
 uv run youtube explore --seed @redbullbcone --dry-run
 
 # default: description-link mining (cheap)

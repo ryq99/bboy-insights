@@ -1,7 +1,14 @@
+"""Seed-aware discovery of bboy channels via link mining and keyword search.
+
+Parked: low recall for media-brand seeds; curate channels by hand (see README).
+"""
+
+import itertools
 import re
 from collections import Counter
 
 import pandas as pd
+from googleapiclient.errors import HttpError
 
 from . import config, s3io
 from .client import YouTubeClient
@@ -10,23 +17,59 @@ DATASET = "candidates"
 
 # Tokens too generic to be useful search terms derived from titles.
 STOPWORDS = {
-    "the", "and", "for", "with", "feat", "vs", "official", "video", "full",
-    "hd", "new", "live", "part", "ep", "episode", "final", "finals", "round",
-    "top", "best", "of", "in", "at", "on", "to", "a", "an", "by", "x", "ft",
-    "highlights", "recap", "day", "world", "com", "www", "http", "https",
+    "the",
+    "and",
+    "for",
+    "with",
+    "feat",
+    "vs",
+    "official",
+    "video",
+    "full",
+    "hd",
+    "new",
+    "live",
+    "part",
+    "ep",
+    "episode",
+    "final",
+    "finals",
+    "round",
+    "top",
+    "best",
+    "of",
+    "in",
+    "at",
+    "on",
+    "to",
+    "a",
+    "an",
+    "by",
+    "x",
+    "ft",
+    "highlights",
+    "recap",
+    "day",
+    "world",
+    "com",
+    "www",
+    "http",
+    "https",
 }
 _TOKEN_RE = re.compile(r"[a-z0-9']+")
 
 
 def _tokens(text: str) -> list[str]:
+    """Lowercase tokens from `text`, dropping stopwords and short tokens."""
     return [
-        t for t in _TOKEN_RE.findall(text.lower())
+        t
+        for t in _TOKEN_RE.findall(text.lower())
         if len(t) > 2 and t not in STOPWORDS
     ]
 
 
 def resolve_seed(yt: YouTubeClient, handle: str) -> dict | None:
-    """Resolve a channel handle to id/title/uploads-playlist, or None if not found."""
+    """Resolve a handle to id/title/uploads-playlist, or None."""
     resp = yt.channels_list(
         part="id,snippet,contentDetails",
         forHandle=handle.lstrip("@"),
@@ -39,14 +82,20 @@ def resolve_seed(yt: YouTubeClient, handle: str) -> dict | None:
     return {
         "channel_id": ch["id"],
         "title": ch["snippet"]["title"],
-        "description": ch["snippet"].get("description", ""),  # channel "about" text — mined for links
+        # channel "about" text — mined for links
+        "description": ch["snippet"].get("description", ""),
         "uploads": ch["contentDetails"]["relatedPlaylists"]["uploads"],
     }
 
 
-def recent_video_ids(yt: YouTubeClient, uploads_playlist: str, n: int = 50) -> list[str]:
+def recent_video_ids(
+    yt: YouTubeClient, uploads_playlist: str, n: int = 50
+) -> list[str]:
+    """Up to `n` recent video ids from the uploads playlist (one page)."""
     resp = yt.playlist_items_list(
-        part="contentDetails", playlistId=uploads_playlist, maxResults=min(n, 50)
+        part="contentDetails",
+        playlistId=uploads_playlist,
+        maxResults=min(n, 50),
     )
     return [it["contentDetails"]["videoId"] for it in resp.get("items", [])][:n]
 
@@ -57,24 +106,32 @@ _HANDLE_RE = re.compile(r"@([A-Za-z0-9._-]{3,30})")
 _VIDEO_RE = re.compile(r"(?:youtu\.be/|watch\?v=)([0-9A-Za-z_-]{11})")
 
 
-def _seed_descriptions(yt: YouTubeClient, seeds: list[dict], recent_n: int) -> str:
-    """Concatenate each seed's channel 'about' text and its recent video descriptions."""
+def _seed_descriptions(
+    yt: YouTubeClient, seeds: list[dict], recent_n: int
+) -> str:
+    """Concatenate each seed's 'about' text and recent video descriptions."""
     texts = []
     for seed in seeds:
         texts.append(seed.get("description", ""))
         vids = recent_video_ids(yt, seed["uploads"], n=recent_n)
-        for i in range(0, len(vids), 50):
-            resp = yt.videos_list(part="snippet", id=",".join(vids[i : i + 50]))
+        for batch in itertools.batched(vids, config.API_PAGE_SIZE):
+            resp = yt.videos_list(part="snippet", id=",".join(batch))
             for it in resp.get("items", []):
                 texts.append(it.get("snippet", {}).get("description", ""))
     return "\n".join(texts)
 
 
 def mine_description_channels(
-    yt: YouTubeClient, seeds: list[dict], recent_n: int = 50, max_handle_resolves: int = 50
+    yt: YouTubeClient,
+    seeds: list[dict],
+    recent_n: int = 50,
+    max_handle_resolves: int = 50,
 ) -> pd.DataFrame:
-    """Discover channels linked in seed descriptions (the creator graph): /channel/UC… ids,
-    @handles, and video links resolved to their uploader. Returns [channel_id, channel_title, n_refs]."""
+    """Discover channels linked in seed descriptions: /channel/UC ids, @handles,
+    and video links resolved to their uploader.
+
+    Returns columns [channel_id, channel_title, n_refs].
+    """
     blob = _seed_descriptions(yt, seeds, recent_n)
 
     refs: Counter = Counter()
@@ -83,11 +140,15 @@ def mine_description_channels(
     for cid in _CHANNEL_ID_RE.findall(blob):  # direct channel ids — free
         refs[cid] += 1
 
-    handles = list(dict.fromkeys(h.lower() for h in _HANDLE_RE.findall(blob)))[:max_handle_resolves]
+    handles = list(dict.fromkeys(h.lower() for h in _HANDLE_RE.findall(blob)))[
+        :max_handle_resolves
+    ]
     for h in handles:  # @handle -> channel via forHandle (1 unit each, capped)
         try:
-            resp = yt.channels_list(part="id,snippet", forHandle=h, maxResults=1)
-        except Exception:
+            resp = yt.channels_list(
+                part="id,snippet", forHandle=h, maxResults=1
+            )
+        except HttpError:  # unresolvable/invalid handle — skip it
             continue
         items = resp.get("items", [])
         if items:
@@ -96,8 +157,9 @@ def mine_description_channels(
             titles.setdefault(cid, items[0]["snippet"]["title"])
 
     video_ids = list(dict.fromkeys(_VIDEO_RE.findall(blob)))
-    for i in range(0, len(video_ids), 50):  # video link -> uploader channel (batched)
-        resp = yt.videos_list(part="snippet", id=",".join(video_ids[i : i + 50]))
+    # video link -> uploader channel (batched)
+    for batch in itertools.batched(video_ids, config.API_PAGE_SIZE):
+        resp = yt.videos_list(part="snippet", id=",".join(batch))
         for it in resp.get("items", []):
             sn = it.get("snippet", {})
             cid = sn.get("channelId")
@@ -115,13 +177,13 @@ def mine_description_channels(
 def _seed_terms(yt: YouTubeClient, video_ids: list[str]) -> Counter:
     """Frequency-count candidate terms from seed videos' tags and titles."""
     counts: Counter = Counter()
-    for i in range(0, len(video_ids), 50):
-        batch = video_ids[i : i + 50]
+    for batch in itertools.batched(video_ids, config.API_PAGE_SIZE):
         resp = yt.videos_list(part="snippet", id=",".join(batch))
         for it in resp.get("items", []):
             snippet = it.get("snippet", {})
             for tag in snippet.get("tags", []) or []:
-                counts[tag.strip().lower()] += 2  # tags are curated -> weight higher
+                # tags are curated -> weight higher
+                counts[tag.strip().lower()] += 2
             for tok in _tokens(snippet.get("title", "")):
                 counts[tok] += 1
     return counts
@@ -130,7 +192,7 @@ def _seed_terms(yt: YouTubeClient, video_ids: list[str]) -> Counter:
 def derive_query_terms(
     yt: YouTubeClient, seeds: list[dict], max_queries: int, recent_n: int = 50
 ) -> list[str]:
-    """Seed-derived terms first (the seed-aware signal), then keyword anchors, capped."""
+    """Seed-derived terms first, then keyword anchors, capped."""
     counts: Counter = Counter()
     for seed in seeds:
         vids = recent_video_ids(yt, seed["uploads"], n=recent_n)
@@ -153,7 +215,7 @@ def derive_query_terms(
 def search_uploaders(
     yt: YouTubeClient, terms: list[str], pages: int, order: str
 ) -> pd.DataFrame:
-    """Video search across terms; return one row per (channel, video, matched term)."""
+    """Video search across terms; one row per (channel, video, term)."""
     rows = []
     for term in terms:
         page_token = None
@@ -183,19 +245,23 @@ def search_uploaders(
 
 
 def _is_bboy(title: str, description: str, topics: list[str]) -> bool:
+    """Heuristic bboy flag: keyword hit in text, or a hip-hop/dance topic."""
     text = f"{title} {description}".lower()
     if any(kw.lower() in text for kw in config.BBOY_KEYWORDS):
         return True
-    return any(("hip_hop" in t.lower() or "dance" in t.lower()) for t in (topics or []))
+    return any(
+        ("hip_hop" in t.lower() or "dance" in t.lower()) for t in (topics or [])
+    )
 
 
 def enrich_channels(yt: YouTubeClient, channel_ids: list[str]) -> pd.DataFrame:
     """channels.list stats for candidate channels, in batches of 50."""
     rows = []
-    for i in range(0, len(channel_ids), 50):
-        batch = channel_ids[i : i + 50]
+    for batch in itertools.batched(channel_ids, config.API_PAGE_SIZE):
         resp = yt.channels_list(
-            part="snippet,statistics,topicDetails", id=",".join(batch), maxResults=50
+            part="snippet,statistics,topicDetails",
+            id=",".join(batch),
+            maxResults=config.API_PAGE_SIZE,
         )
         for ch in resp.get("items", []):
             sn = ch.get("snippet", {})
@@ -220,26 +286,30 @@ def enrich_channels(yt: YouTubeClient, channel_ids: list[str]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def seen_channel_ids() -> set[str]:
-    """channel_ids already written to the candidates dataset in prior runs (empty on first run)."""
-    prior = s3io.read_csv_optional(DATASET)
-    if prior is None or "channel_id" not in prior.columns:
-        return set()
-    return set(prior["channel_id"].dropna().astype(str))
-
-
-def _search_candidates(
-    yt: YouTubeClient, resolved, keywords, pages, order, max_queries, recent_n, seed_ids
+def search_candidates(
+    yt: YouTubeClient,
+    resolved: list[dict],
+    keywords: list[str] | None,
+    pages: int,
+    order: str,
+    max_queries: int,
+    recent_n: int,
+    seed_ids: set[str],
 ) -> pd.DataFrame:
-    """Keyword-search source: seed-derived (or supplied) terms -> uploader channels, scored."""
-    terms = list(dict.fromkeys(keywords))[:max_queries] if keywords else derive_query_terms(
-        yt, resolved, max_queries, recent_n=recent_n
+    """Keyword-search source: terms -> uploader channels, scored."""
+    terms = (
+        list(dict.fromkeys(keywords))[:max_queries]
+        if keywords
+        else derive_query_terms(yt, resolved, max_queries, recent_n=recent_n)
     )
-    print(f"search: {len(terms)} terms; ~{len(terms) * pages * 100} units -> {terms}")
+    units = len(terms) * pages * 100
+    print(f"search: {len(terms)} terms; ~{units} units -> {terms}")
     hits = search_uploaders(yt, terms, pages=pages, order=order)
     hits = hits[hits["channel_id"].notna() & ~hits["channel_id"].isin(seed_ids)]
     if hits.empty:
-        return pd.DataFrame(columns=["channel_id", "channel_title", "match_score", "source"])
+        return pd.DataFrame(
+            columns=["channel_id", "channel_title", "match_score", "source"]
+        )
     agg = (
         hits.groupby("channel_id")
         .agg(
@@ -250,7 +320,9 @@ def _search_candidates(
         .reset_index()
     )
     agg["match_score"] = agg["n_terms"] * 2 + agg["n_videos"]
-    return agg.assign(source="search")[["channel_id", "channel_title", "match_score", "source"]]
+    return agg.assign(source="search")[
+        ["channel_id", "channel_title", "match_score", "source"]
+    ]
 
 
 def explore(
@@ -265,12 +337,11 @@ def explore(
     include_seen: bool = False,
     dry_run: bool = False,
 ) -> pd.DataFrame | None:
-    """Seed-aware bboy channel discovery. Data API v3 has no "similar channels" endpoint, so we
-    combine two selectable `sources`: description-link mining (channels linked in the seeds'
-    channel/video descriptions — high precision) and keyword search (video search on seed-derived
-    terms — broader reach). Results are unioned, deduped to new-since-last-run (unless
-    `include_seen`), enriched, scored, and written to S3 + a local data/ copy. `dry_run` previews
-    without spending search quota.
+    """Seed-aware bboy channel discovery via link mining and/or keyword search.
+
+    Results from the chosen `sources` are unioned, deduped to new-since-last-run
+    (unless `include_seen`), enriched, scored, and written to S3 + local data/;
+    `dry_run` previews without spending search quota.
     """
     yt = YouTubeClient()
 
@@ -293,34 +364,54 @@ def explore(
         print(f"\n[dry-run] sources={list(sources)}")
         if "description" in sources:
             print(
-                f"  description: mine channel 'about' + up to {recent_n} recent video descriptions "
-                f"per seed (cheap; resolves up to {max_handle_resolves} @handles)."
+                f"  description: mine 'about' + up to {recent_n} recent "
+                f"video descriptions/seed (<= {max_handle_resolves} @handles)."
             )
         if "search" in sources:
             terms = (
                 list(dict.fromkeys(keywords))[:max_queries]
                 if keywords
-                else derive_query_terms(yt, resolved, max_queries, recent_n=recent_n)
+                else derive_query_terms(
+                    yt, resolved, max_queries, recent_n=recent_n
+                )
             )
-            print(f"  search: {len(terms)} terms {terms} -> ~{len(terms) * pages * 100} search units.")
+            units = len(terms) * pages * 100
+            print(f"  search: {len(terms)} terms {terms} -> ~{units} units.")
         print("Stopping before search/enrichment/write.")
         return None
 
     frames = []
     if "description" in sources:
-        d = mine_description_channels(yt, resolved, recent_n=recent_n, max_handle_resolves=max_handle_resolves)
-        d = d[d["channel_id"].notna() & ~d["channel_id"].isin(seed_ids)]
-        print(f"description: found {len(d)} linked channels.")
-        if not d.empty:
+        desc_df = mine_description_channels(
+            yt,
+            resolved,
+            recent_n=recent_n,
+            max_handle_resolves=max_handle_resolves,
+        )
+        desc_df = desc_df[
+            desc_df["channel_id"].notna()
+            & ~desc_df["channel_id"].isin(seed_ids)
+        ]
+        print(f"description: found {len(desc_df)} linked channels.")
+        if not desc_df.empty:
             frames.append(
-                d.rename(columns={"n_refs": "match_score"}).assign(source="description_link")[
-                    ["channel_id", "channel_title", "match_score", "source"]
-                ]
+                desc_df.rename(columns={"n_refs": "match_score"}).assign(
+                    source="description_link"
+                )[["channel_id", "channel_title", "match_score", "source"]]
             )
     if "search" in sources:
-        s = _search_candidates(yt, resolved, keywords, pages, order, max_queries, recent_n, seed_ids)
-        if not s.empty:
-            frames.append(s)
+        search_df = search_candidates(
+            yt,
+            resolved,
+            keywords,
+            pages,
+            order,
+            max_queries,
+            recent_n,
+            seed_ids,
+        )
+        if not search_df.empty:
+            frames.append(search_df)
 
     if not frames:
         print("\nNo candidate channels found — nothing written.")
@@ -333,17 +424,22 @@ def explore(
         .agg(
             channel_title=("channel_title", "first"),
             match_score=("match_score", "sum"),
-            source=("source", lambda s: "both" if s.nunique() > 1 else s.iloc[0]),
+            source=(
+                "source",
+                lambda srcs: "both" if srcs.nunique() > 1 else srcs.iloc[0],
+            ),
         )
         .reset_index()
     )
     print(f"Found {len(combined)} unique candidate channels (excluding seeds).")
 
     if not include_seen:
-        seen = seen_channel_ids()
+        seen = s3io.seen_ids(DATASET, "channel_id")
         if seen:
             before = len(combined)
-            combined = combined[~combined["channel_id"].isin(seen)].reset_index(drop=True)
+            combined = combined[~combined["channel_id"].isin(seen)].reset_index(
+                drop=True
+            )
             print(
                 f"Excluded {before - len(combined)} previously-seen "
                 f"({len(seen)} known); {len(combined)} new since last run."
@@ -365,6 +461,13 @@ def explore(
     path = s3io.to_csv(out, DATASET, "candidate_channels")
     print(f"\nWrote {len(out)} new candidates -> {path}")
     print(f"Total quota used this run: {yt.quota_used} units")
-    cols = ["channel_id", "title", "source", "match_score", "num_subscribers", "likely_bboy"]
+    cols = [
+        "channel_id",
+        "title",
+        "source",
+        "match_score",
+        "num_subscribers",
+        "likely_bboy",
+    ]
     print(out[cols].head(15).to_string(index=False))
     return out

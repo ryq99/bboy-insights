@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-youtube = "youtube.cli:main"
+youtube = "youtube.main:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -24,3 +24,16 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["youtube"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.16.2",
+]
+
+[tool.ruff]
+line-length = 80
+target-version = "py314"
+
+[tool.ruff.lint]
+# pycodestyle errors, pyflakes, import sorting (Google-style import ordering).
+select = ["E", "F", "I"]

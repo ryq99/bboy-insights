@@ -1,20 +1,23 @@
+"""Config and secrets from .env, plus seed lists and ingest constants."""
+
 import os
 
 from dotenv import load_dotenv
 
-load_dotenv()  # read config/secrets from .env in the working dir (repo root under the CLI); see .env.example
+# Read config/secrets from .env in the working dir; see .env.example.
+load_dotenv()
 
 S3_BUCKET = os.getenv("S3_BUCKET", "bboy-insights")
 S3_PREFIX = os.getenv("S3_PREFIX", "youtube_data")
 AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
 
-# Curated bboy channels to ingest (handles). Manually maintained until explore() works.
-# Resolved to channel_ids at runtime via channels.list(forHandle=...); append handles to scale out.
+# Curated bboy channels to ingest (handles); maintained by hand.
+# Resolved to channel_ids at runtime via channels.list(forHandle=...).
 SEED_CHANNELS = [
     "@redbullbcone",
 ]
 
-# Anchor search terms for bboy channel discovery. Used alongside seed-derived terms.
+# Anchor search terms for discovery. Used alongside seed-derived terms.
 BBOY_KEYWORDS = [
     "bboy",
     "b-boy",
@@ -35,11 +38,35 @@ BBOY_KEYWORDS = [
 ]
 
 
+# --- youtube.ingest parameters ---
+
+# S3 / local dataset names for the breadth-browse outputs.
+CHANNEL_METADATA_DATASET = "channel_metadata"
+VIDEO_DETAILS_DATASET = "video_details"
+
+# --since window spec -> days back. "all" = no cutoff (full backfill).
+SINCE_WINDOWS = {"3m": 90, "6m": 180, "12m": 365, "1y": 365}
+DEFAULT_SINCE = "3m"
+
+# YouTube Data API caps list pages / videos.list id batches at 50 items.
+API_PAGE_SIZE = 50
+
+# Videos at or under this many seconds are labeled Shorts (no true Shorts flag).
+SHORT_MAX_SECONDS = 60
+
+# API "part" field selections per request type.
+CHANNEL_PARTS = (
+    "snippet,statistics,topicDetails,brandingSettings,contentDetails"
+)
+VIDEO_PARTS = "snippet,contentDetails,statistics,topicDetails,status"
+PLAYLIST_ITEM_PARTS = "contentDetails"
+
+
 def api_key() -> str:
     """Return the YouTube Data API key, or raise if it is not configured."""
     key = os.getenv("YT_DATA_API_KEY")
     if not key:
         raise RuntimeError(
-            "YT_DATA_API_KEY is not set. Copy .env.example to .env and fill it in."
+            "YT_DATA_API_KEY is not set; copy .env.example to .env."
         )
     return key

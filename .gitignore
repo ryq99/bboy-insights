@@ -1,9 +1,5 @@
-instabboy/data/raw/*/*.json
-instabboy/data/raw/*/*.jpg
-instabboy/data/raw/*/*.json.xz
-instabboy/data/raw/*/*.txt
-instabboy/args.txt
-instabboy/bboys.txt
+# instabboy — untracked (local data only)
+instabboy/
 
 **/InstaPy
 **/instagram-profilecrawl

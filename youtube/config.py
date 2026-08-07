@@ -8,6 +8,12 @@ S3_BUCKET = os.getenv("S3_BUCKET", "bboy-insights")
 S3_PREFIX = os.getenv("S3_PREFIX", "youtube_data")
 AWS_REGION = os.getenv("AWS_REGION", "us-west-2")
 
+# Curated bboy channels to ingest (handles). Manually maintained until explore() works.
+# Resolved to channel_ids at runtime via channels.list(forHandle=...); append handles to scale out.
+SEED_CHANNELS = [
+    "@redbullbcone",
+]
+
 # Anchor search terms for bboy channel discovery. Used alongside seed-derived terms.
 BBOY_KEYWORDS = [
     "bboy",

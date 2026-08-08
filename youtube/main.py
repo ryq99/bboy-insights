@@ -84,15 +84,10 @@ def _add_ingest(subparsers) -> argparse.ArgumentParser:
         help="Channel handles to ingest (default: config.SEED_CHANNELS).",
     )
     p.add_argument(
-        "--since",
-        default=config.DEFAULT_SINCE,
-        choices=[*config.SINCE_WINDOWS, "all"],
-        help="Time window of uploads to fetch ('all' = full backfill).",
-    )
-    p.add_argument(
-        "--refresh",
-        action="store_true",
-        help="Re-pull in-window videos for fresh stats (default: skip seen).",
+        "--window",
+        default=config.DEFAULT_WINDOW,
+        choices=[*config.WINDOW_DAYS, "all_time"],
+        help="Time window of uploads to fetch ('all_time' = full backfill).",
     )
     p.add_argument(
         "--dry-run",
@@ -115,8 +110,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "ingest":
         ingest_mod.ingest(
             handles=args.channels or config.SEED_CHANNELS,
-            since=args.since,
-            refresh=args.refresh,
+            window=args.window,
             dry_run=args.dry_run,
         )
         return 0

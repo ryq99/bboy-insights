@@ -44,9 +44,9 @@ BBOY_KEYWORDS = [
 CHANNEL_METADATA_DATASET = "channel_metadata"
 VIDEO_DETAILS_DATASET = "video_details"
 
-# --since window spec -> days back. "all" = no cutoff (full backfill).
-SINCE_WINDOWS = {"3m": 90, "6m": 180, "12m": 365, "1y": 365}
-DEFAULT_SINCE = "3m"
+# --window spec -> days back. "all_time" = no cutoff (full backfill).
+WINDOW_DAYS = {"last_week": 7, "last_month": 30}
+DEFAULT_WINDOW = "last_month"
 
 # YouTube Data API caps list pages / videos.list id batches at 50 items.
 API_PAGE_SIZE = 50

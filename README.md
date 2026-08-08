@@ -32,29 +32,33 @@ cp .env.example .env    # then fill in YT_DATA_API_KEY
 
 CLI: `uv run youtube <command>` (installed as a console script by `uv sync`).
 
-### `ingest` — breadth-browse curated channels
+### `ingest` — breadth-browse curated channels (catalog)
 
-Builds the bboy-channel database by browsing a **curated seed list** (`config.SEED_CHANNELS`, edited by
-hand) breadth-first: for each channel it writes a one-row channel snapshot and a table of every video's
-high-level metadata (title, description, tags, duration, stats, topics, content type) in a time window.
+Builds the bboy-channel **catalog** by browsing a **curated seed list** (`config.SEED_CHANNELS`, edited
+by hand) breadth-first: for each channel it writes a one-row channel snapshot and a table of every
+video's high-level metadata (title, description, tags, duration, stats, topics, content type) in a time
+window. This answers *what content a channel has* — not how metrics change over time (see below).
 
 ```bash
 # preview: resolve channels, count in-window videos, project quota — writes nothing
 uv run youtube ingest --dry-run
 
-# default: last 3 months of uploads for every SEED_CHANNELS entry
+# default: last month of uploads for every SEED_CHANNELS entry
 uv run youtube ingest
 
 # a specific channel, full-history backfill (same code path, just a wider window)
-uv run youtube ingest --channels @redbullbcone --since all
+uv run youtube ingest --channels @redbullbcone --window all_time
 ```
 
-Key flags: `--channels` (default `config.SEED_CHANNELS`), `--since` (`3m` default / `6m` / `12m` / `1y`
-/ `all`), `--refresh` (re-pull in-window videos to update view/like counts; default skips
-already-stored videos), `--dry-run`.
+Key flags: `--channels` (default `config.SEED_CHANNELS`), `--window` (`last_week` / `last_month`
+default / `all_time`), `--dry-run`.
 
-**Incremental:** by default each run skips `video_id`s already stored for the channel, so re-runs cost
-only the cheap playlist paging. `--refresh` re-pulls in-window videos to freshen stats.
+**Incremental (always):** each run skips `video_id`s already stored for the channel and writes only the
+delta, so daily re-runs never duplicate video rows — they cost only the cheap playlist paging. Video
+stats are captured once, at first sighting.
+
+> **Not this command:** tracking how view/like/comment counts (and comments) change *over time* is a
+> separate planned time-series ingestion, kept out of `ingest` so the catalog stays dedup-clean.
 
 **Quota:** cheap — per channel ≈ 1 unit (channel meta) + 1 unit/50 videos to list uploads + 1 unit/50
 to fetch details. A full ~3,300-video backfill ≈ 135 units (of the 10k/day).

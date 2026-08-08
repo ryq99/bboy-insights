@@ -10,14 +10,14 @@ from . import config, s3io
 from .client import YouTubeClient
 
 
-def parse_since(spec: str) -> datetime | None:
-    """Window spec -> UTC cutoff datetime, or None for 'all' (full backfill)."""
-    if spec == "all":
+def parse_window(spec: str) -> datetime | None:
+    """Window spec -> UTC cutoff, or None for 'all_time' (full backfill)."""
+    if spec == "all_time":
         return None
-    days = config.SINCE_WINDOWS.get(spec)
+    days = config.WINDOW_DAYS.get(spec)
     if days is None:
         raise ValueError(
-            f"bad --since {spec!r}; use {sorted(config.SINCE_WINDOWS)} or 'all'"
+            f"bad --window {spec!r}; use {[*config.WINDOW_DAYS, 'all_time']}"
         )
     return datetime.now(timezone.utc) - timedelta(days=days)
 
@@ -166,11 +166,11 @@ def fetch_video_details(
 
 
 def ingest_channel(
-    yt: YouTubeClient, handle: str, since: datetime | None, refresh: bool
+    yt: YouTubeClient, handle: str, cutoff: datetime | None
 ) -> tuple[dict, pd.DataFrame] | None:
-    """Resolve one channel and fetch its in-window video metadata.
+    """Resolve one channel and fetch metadata for its new in-window videos.
 
-    Incremental by default; `refresh` re-pulls stored videos to update stats.
+    Always incremental: videos already stored for the channel are skipped.
     """
     channel = resolve_channel(yt, handle)
     if not channel:
@@ -178,20 +178,19 @@ def ingest_channel(
         return None
     print(f"  {handle} -> {channel['channel_id']} ({channel['title']})")
 
-    ids = channel_video_ids(yt, channel["uploads_playlist"], since)
+    ids = channel_video_ids(yt, channel["uploads_playlist"], cutoff)
     print(f"    {len(ids)} videos in window")
 
-    if not refresh:
-        seen = s3io.seen_ids(
-            config.VIDEO_DETAILS_DATASET,
-            "video_id",
-            pattern=f"{channel['channel_id']}_*",
-        )
-        if seen:
-            new_ids = [v for v in ids if v not in seen]
-            skipped = len(ids) - len(new_ids)
-            print(f"    {len(new_ids)} new, {skipped} already stored (skipped)")
-            ids = new_ids
+    seen = s3io.seen_ids(
+        config.VIDEO_DETAILS_DATASET,
+        "video_id",
+        pattern=f"{channel['channel_id']}_*",
+    )
+    if seen:
+        new_ids = [v for v in ids if v not in seen]
+        skipped = len(ids) - len(new_ids)
+        print(f"    {len(new_ids)} new, {skipped} already stored (skipped)")
+        ids = new_ids
 
     videos = fetch_video_details(yt, ids) if ids else pd.DataFrame()
     return channel, videos
@@ -199,21 +198,20 @@ def ingest_channel(
 
 def ingest(
     handles: list[str] | None = None,
-    since: str = config.DEFAULT_SINCE,
-    refresh: bool = False,
+    window: str = config.DEFAULT_WINDOW,
     dry_run: bool = False,
 ) -> None:
-    """Browse each curated channel: snapshot plus in-window video metadata.
+    """Browse each curated channel: snapshot plus new in-window video metadata.
 
-    `dry_run` previews without writing; `since="all"` does a full backfill.
+    `dry_run` previews without writing; `all_time` backfills everything.
     """
     yt = YouTubeClient()
     handles = handles or config.SEED_CHANNELS
-    cutoff = parse_since(since)
-    window = (
-        "all history" if cutoff is None else f"since {cutoff.date()} ({since})"
+    cutoff = parse_window(window)
+    label = (
+        "all history" if cutoff is None else f"since {cutoff.date()} ({window})"
     )
-    print(f"Ingesting {len(handles)} channel(s), window: {window}")
+    print(f"Ingesting {len(handles)} channel(s), window: {label}")
 
     for handle in handles:
         if dry_run:
@@ -231,7 +229,7 @@ def ingest(
             )
             continue
 
-        result = ingest_channel(yt, handle, cutoff, refresh)
+        result = ingest_channel(yt, handle, cutoff)
         if result is None:
             continue
         channel, videos = result

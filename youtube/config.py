@@ -54,11 +54,14 @@ API_PAGE_SIZE = 50
 # Videos at or under this many seconds are labeled Shorts (no true Shorts flag).
 SHORT_MAX_SECONDS = 60
 
-# API "part" field selections per request type.
+# API "part" selections per request (flat 1 unit/call regardless of parts).
 CHANNEL_PARTS = (
-    "snippet,statistics,topicDetails,brandingSettings,contentDetails"
+    "snippet,statistics,topicDetails,brandingSettings,contentDetails,status"
 )
-VIDEO_PARTS = "snippet,contentDetails,statistics,topicDetails,status"
+VIDEO_PARTS = (
+    "snippet,contentDetails,statistics,topicDetails,status,"
+    "recordingDetails,liveStreamingDetails"
+)
 PLAYLIST_ITEM_PARTS = "contentDetails"
 
 

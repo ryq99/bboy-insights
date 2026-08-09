@@ -110,6 +110,19 @@ def channel_video_ids(
     return ids
 
 
+# Thumbnail resolutions, best first.
+_THUMB_RES = ("maxres", "standard", "high", "medium", "default")
+
+
+def _best_thumbnail(thumbs: dict) -> str | None:
+    """Highest-resolution thumbnail URL available, or None."""
+    for res in _THUMB_RES:
+        url = thumbs.get(res, {}).get("url")
+        if url:
+            return url
+    return None
+
+
 def fetch_video_details(
     yt: YouTubeClient, video_ids: list[str]
 ) -> pd.DataFrame:
@@ -126,6 +139,7 @@ def fetch_video_details(
             sn = it.get("snippet", {})
             cd = it.get("contentDetails", {})
             st = it.get("statistics", {})
+            status = it.get("status", {})
             duration_sec = _duration_seconds(cd.get("duration", ""))
             live = sn.get("liveBroadcastContent", "none")
             # No true Shorts flag; approximate via duration/live status.
@@ -159,6 +173,14 @@ def fetch_video_details(
                     "has_captions": cd.get("caption") == "true",
                     "default_language": sn.get("defaultLanguage"),
                     "default_audio_language": sn.get("defaultAudioLanguage"),
+                    "thumbnail_url": _best_thumbnail(sn.get("thumbnails", {})),
+                    "definition": cd.get("definition"),
+                    "dimension": cd.get("dimension"),
+                    "licensed_content": cd.get("licensedContent"),
+                    "license": status.get("license"),
+                    "made_for_kids": status.get("madeForKids"),
+                    "embeddable": status.get("embeddable"),
+                    "privacy_status": status.get("privacyStatus"),
                     "fetched_at": fetched_at,
                 }
             )

@@ -140,6 +140,9 @@ def fetch_video_details(
             cd = it.get("contentDetails", {})
             st = it.get("statistics", {})
             status = it.get("status", {})
+            rec = it.get("recordingDetails", {})
+            loc = rec.get("location", {})
+            lsd = it.get("liveStreamingDetails", {})
             duration_sec = _duration_seconds(cd.get("duration", ""))
             live = sn.get("liveBroadcastContent", "none")
             # No true Shorts flag; approximate via duration/live status.
@@ -181,6 +184,13 @@ def fetch_video_details(
                     "made_for_kids": status.get("madeForKids"),
                     "embeddable": status.get("embeddable"),
                     "privacy_status": status.get("privacyStatus"),
+                    "recording_date": rec.get("recordingDate"),
+                    "recording_lat": loc.get("latitude"),
+                    "recording_lng": loc.get("longitude"),
+                    "live_actual_start": lsd.get("actualStartTime"),
+                    "live_actual_end": lsd.get("actualEndTime"),
+                    "live_scheduled_start": lsd.get("scheduledStartTime"),
+                    "live_concurrent_viewers": lsd.get("concurrentViewers"),
                     "fetched_at": fetched_at,
                 }
             )

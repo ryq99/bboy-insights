@@ -69,7 +69,9 @@ to fetch details. A full ~3,300-video backfill ≈ 135 units (of the 10k/day).
 - `video_details/<channel_id>_<ts>.csv` — one row per video: title, description, tags, `published_at`,
   `duration_sec`, `content_type` (`short`/`video`/`live`/`upcoming`), view/like/comment counts, topic
   categories, `has_captions`, languages, `thumbnail_url`, `definition` (hd/sd), `dimension`,
-  `licensed_content`, `license`, `made_for_kids`, `embeddable`, `privacy_status`.
+  `licensed_content`, `license`, `made_for_kids`, `embeddable`, `privacy_status`, `recording_date`,
+  `recording_lat`/`recording_lng` (geo, usually null), and live-event timings
+  (`live_actual_start`/`_end`, `live_scheduled_start`, `live_concurrent_viewers`).
 
 Read the whole video table with `s3io.read_csv("video_details")`, then dedup on `video_id` keeping the
 latest `fetched_at` (backfill + incremental runs accumulate per-channel files).

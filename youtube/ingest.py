@@ -77,14 +77,23 @@ def resolve_channel(yt: YouTubeClient, handle: str) -> dict | None:
 
 
 def channel_video_ids(
-    yt: YouTubeClient, uploads: str, since: datetime | None
+    yt: YouTubeClient,
+    uploads: str,
+    since: datetime | None,
+    seen: set[str] | None = None,
 ) -> list[str]:
-    """Collect uploads video ids newest-first until they predate `since`.
+    """Collect new uploads video ids newest-first until they predate `since`.
 
-    Pages to the end when `since` is None; 1 quota unit per 50-video page.
+    Pages to the end when `since` is None. When `seen` (already-stored ids) is
+    given, skip those ids and stop paging after `config.STOP_AFTER_SEEN`
+    consecutive stored ids -- uploads are newest-first, so a contiguous stored
+    block means everything older is stored too (valid once the channel has had
+    one full all_time ingest). 1 quota unit per 50-video page.
     """
+    seen = seen or set()
     ids: list[str] = []
     page_token = None
+    consecutive_seen = 0
     while True:
         resp = yt.playlist_items_list(
             part=config.PLAYLIST_ITEM_PARTS,
@@ -103,6 +112,13 @@ def channel_video_ids(
                 if published is not None and published < since:
                     stop = True
                     break  # newest-first, so everything after this is older too
+            if vid in seen:
+                consecutive_seen += 1
+                if consecutive_seen >= config.STOP_AFTER_SEEN:
+                    stop = True
+                    break
+                continue
+            consecutive_seen = 0
             ids.append(vid)
         page_token = resp.get("nextPageToken")
         if stop or not page_token:
@@ -210,19 +226,13 @@ def ingest_channel(
         return None
     print(f"  {handle} -> {channel['channel_id']} ({channel['title']})")
 
-    ids = channel_video_ids(yt, channel["uploads_playlist"], cutoff)
-    print(f"    {len(ids)} videos in window")
-
     seen = s3io.seen_ids(
         config.VIDEO_DETAILS_DATASET,
         "video_id",
         pattern=f"{channel['channel_id']}_*",
     )
-    if seen:
-        new_ids = [v for v in ids if v not in seen]
-        skipped = len(ids) - len(new_ids)
-        print(f"    {len(new_ids)} new, {skipped} already stored (skipped)")
-        ids = new_ids
+    ids = channel_video_ids(yt, channel["uploads_playlist"], cutoff, seen=seen)
+    print(f"    {len(ids)} new videos")
 
     videos = fetch_video_details(yt, ids) if ids else pd.DataFrame()
     return channel, videos
@@ -251,13 +261,19 @@ def ingest(
             if not channel:
                 print(f"  ! could not resolve {handle!r}")
                 continue
-            ids = channel_video_ids(yt, channel["uploads_playlist"], cutoff)
-            # resolve (1) + list pages + detail batches, each ceil(n/page).
-            pages = -(-len(ids) // config.API_PAGE_SIZE)
-            projected = 1 + pages + pages
+            seen = s3io.seen_ids(
+                config.VIDEO_DETAILS_DATASET,
+                "video_id",
+                pattern=f"{channel['channel_id']}_*",
+            )
+            ids = channel_video_ids(
+                yt, channel["uploads_playlist"], cutoff, seen=seen
+            )
+            # resolve + paging already spent; +ceil(new/page) to fetch details.
+            detail_units = -(-len(ids) // config.API_PAGE_SIZE)
             print(
                 f"  {handle} -> {channel['channel_id']} ({channel['title']}): "
-                f"{len(ids)} videos in window; ~{projected} units live"
+                f"{len(ids)} new videos; ~{detail_units} more units to fetch"
             )
             continue
 

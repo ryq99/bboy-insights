@@ -51,6 +51,11 @@ DEFAULT_WINDOW = "last_month"
 # YouTube Data API caps list pages / videos.list id batches at 50 items.
 API_PAGE_SIZE = 50
 
+# Stop paging the uploads playlist after this many consecutive already-stored
+# videos (newest-first => the rest is stored too). Small buffer absorbs the rare
+# re-dated upload. Safe once the channel has had one full (all_time) ingest.
+STOP_AFTER_SEEN = 3
+
 # Videos at or under this many seconds are labeled Shorts (no true Shorts flag).
 SHORT_MAX_SECONDS = 60
 

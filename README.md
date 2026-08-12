@@ -54,8 +54,13 @@ Key flags: `--channels` (default `config.SEED_CHANNELS`), `--window` (`last_week
 default / `all_time`), `--dry-run`.
 
 **Incremental (always):** each run skips `video_id`s already stored for the channel and writes only the
-delta, so daily re-runs never duplicate video rows — they cost only the cheap playlist paging. Video
-stats are captured once, at first sighting.
+delta, so daily re-runs never duplicate video rows. Paging **early-stops** once it hits a contiguous
+block of already-stored videos (uploads are newest-first), so a re-run costs ~1–2 units instead of
+re-paging the whole catalog. Video stats are captured once, at first sighting.
+
+> **Workflow:** run a channel's **first** ingest as `--window all_time` (empty store → full page, so
+> nothing is missed); afterwards any window early-stops safely. Only running narrow windows first and
+> later widening can miss older videos before a full backfill.
 
 > **Not this command:** tracking how view/like/comment counts (and comments) change *over time* is a
 > separate planned time-series ingestion, kept out of `ingest` so the catalog stays dedup-clean.
